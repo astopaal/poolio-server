@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { Company } from '../models/Company';
 import { User } from '../models/User';
 import { Survey } from '../models/Survey';
+import { Response as SurveyResponse } from '../models/Response';
 import { AuthRequest } from '../middleware/auth';
 
 // Şirket Profil İşlemleri
@@ -196,17 +197,38 @@ export const getCompanyStats = async (req: AuthRequest, res: Response): Promise<
 
     const userRepository = getRepository(User);
     const surveyRepository = getRepository(Survey);
+    const responseRepository = getRepository(SurveyResponse);
 
     const [
       totalUsers,
       activeUsers,
       totalSurveys,
-      activeSurveys
+      activeSurveys,
+      totalResponses,
+      completedResponses
     ] = await Promise.all([
       userRepository.count({ where: { company: { id: req.user.companyId } } }),
       userRepository.count({ where: { company: { id: req.user.companyId }, isActive: true } }),
-      surveyRepository.count({ where: { creator: { company: { id: req.user.companyId } } } }),
-      surveyRepository.count({ where: { creator: { company: { id: req.user.companyId } }, isPublished: true } })
+      surveyRepository.createQueryBuilder('survey')
+        .leftJoin('survey.creator', 'creator')
+        .where('creator.companyId = :companyId', { companyId: req.user.companyId })
+        .getCount(),
+      surveyRepository.createQueryBuilder('survey')
+        .leftJoin('survey.creator', 'creator')
+        .where('creator.companyId = :companyId', { companyId: req.user.companyId })
+        .andWhere('survey.status = :status', { status: 'active' })
+        .getCount(),
+      responseRepository.createQueryBuilder('response')
+        .leftJoin('response.survey', 'survey')
+        .leftJoin('survey.creator', 'creator')
+        .where('creator.companyId = :companyId', { companyId: req.user.companyId })
+        .getCount(),
+      responseRepository.createQueryBuilder('response')
+        .leftJoin('response.survey', 'survey')
+        .leftJoin('survey.creator', 'creator')
+        .where('creator.companyId = :companyId', { companyId: req.user.companyId })
+        .andWhere('response.isCompleted = :isCompleted', { isCompleted: true })
+        .getCount()
     ]);
 
     const stats = {
@@ -219,12 +241,97 @@ export const getCompanyStats = async (req: AuthRequest, res: Response): Promise<
         total: totalSurveys,
         active: activeSurveys,
         draft: totalSurveys - activeSurveys
+      },
+      responses: {
+        total: totalResponses,
+        completed: completedResponses,
+        completionRate: totalResponses > 0 ? Math.round((completedResponses / totalResponses) * 100) : 0
       }
     };
+
+    console.log('Company Stats:', {
+      companyId: req.user.companyId,
+      stats,
+      query: {
+        totalSurveys,
+        activeSurveys
+      }
+    });
 
     res.json(stats);
   } catch (error) {
     console.error('Get company stats error:', error);
+    res.status(500).json({ message: 'Sunucu hatası' });
+  }
+};
+
+// Şirket Aktiviteleri
+export const getCompanyActivities = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user?.companyId) {
+      res.status(401).json({ message: 'Şirket bilgisi bulunamadı' });
+      return;
+    }
+
+    const activities = [];
+
+    // Son oluşturulan anketler
+    const surveyRepository = getRepository(Survey);
+    const recentSurveys = await surveyRepository.find({
+      where: { creator: { company: { id: req.user.companyId } } },
+      relations: ['creator'],
+      order: { createdAt: 'DESC' },
+      take: 5
+    });
+
+    activities.push(...recentSurveys.map(survey => ({
+      id: `survey-${survey.id}`,
+      type: 'survey_created',
+      message: `"${survey.title}" anketi ${survey.creator.firstName} ${survey.creator.lastName} tarafından oluşturuldu`,
+      createdAt: survey.createdAt
+    })));
+
+    // Son gelen yanıtlar
+    const responseRepository = getRepository(SurveyResponse);
+    const recentResponses = await responseRepository
+      .createQueryBuilder('response')
+      .leftJoinAndSelect('response.survey', 'survey')
+      .leftJoinAndSelect('survey.creator', 'creator')
+      .where('creator.companyId = :companyId', { companyId: req.user.companyId })
+      .orderBy('response.createdAt', 'DESC')
+      .take(5)
+      .getMany();
+
+    activities.push(...recentResponses.map(response => ({
+      id: `response-${response.id}`,
+      type: 'survey_response',
+      message: `"${response.survey.title}" anketine yeni bir yanıt geldi`,
+      createdAt: response.createdAt
+    })));
+
+    // Son eklenen kullanıcılar
+    const userRepository = getRepository(User);
+    const recentUsers = await userRepository.find({
+      where: { company: { id: req.user.companyId } },
+      order: { createdAt: 'DESC' },
+      take: 5
+    });
+
+    activities.push(...recentUsers.map(user => ({
+      id: `user-${user.id}`,
+      type: 'user_created',
+      message: `${user.firstName} ${user.lastName} kullanıcısı eklendi`,
+      createdAt: user.createdAt
+    })));
+
+    // Aktiviteleri tarihe göre sırala
+    const sortedActivities = activities
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 10);
+
+    res.json(sortedActivities);
+  } catch (error) {
+    console.error('Get company activities error:', error);
     res.status(500).json({ message: 'Sunucu hatası' });
   }
 }; 

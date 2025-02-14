@@ -3,6 +3,8 @@ import { getRepository } from 'typeorm';
 import bcrypt from 'bcryptjs';
 import { Company } from '../models/Company';
 import { User } from '../models/User';
+import { Survey } from '../models/Survey';
+import { Response as SurveyResponse } from '../models/Response';
 import { AuthRequest } from '../middleware/auth';
 
 // Şirket İşlemleri
@@ -211,17 +213,23 @@ export const getSystemStats = async (_req: Request, res: Response): Promise<void
   try {
     const companyRepository = getRepository(Company);
     const userRepository = getRepository(User);
+    const surveyRepository = getRepository(Survey);
+    const responseRepository = getRepository(SurveyResponse);
 
     const [
       totalCompanies,
       activeCompanies,
       totalUsers,
-      activeUsers
+      activeUsers,
+      totalSurveys,
+      totalResponses
     ] = await Promise.all([
       companyRepository.count(),
       companyRepository.count({ where: { isActive: true } }),
       userRepository.count(),
-      userRepository.count({ where: { isActive: true } })
+      userRepository.count({ where: { isActive: true } }),
+      surveyRepository.count(),
+      responseRepository.count()
     ]);
 
     const stats = {
@@ -234,12 +242,95 @@ export const getSystemStats = async (_req: Request, res: Response): Promise<void
         total: totalUsers,
         active: activeUsers,
         inactive: totalUsers - activeUsers
+      },
+      surveys: {
+        total: totalSurveys
+      },
+      responses: {
+        total: totalResponses
       }
     };
 
     res.json(stats);
   } catch (error) {
     console.error('Get system stats error:', error);
+    res.status(500).json({ message: 'Sunucu hatası' });
+  }
+};
+
+// Super Admin için son aktiviteleri getir
+export const getSystemActivities = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const companyRepository = getRepository(Company);
+    const userRepository = getRepository(User);
+    const surveyRepository = getRepository(Survey);
+    const responseRepository = getRepository(SurveyResponse);
+
+    const activities = [];
+
+    // Son oluşturulan şirketler
+    const recentCompanies = await companyRepository.find({
+      order: { createdAt: 'DESC' },
+      take: 5
+    });
+
+    activities.push(...recentCompanies.map(company => ({
+      id: `company-${company.id}`,
+      type: 'company_created',
+      message: `"${company.name}" şirketi oluşturuldu`,
+      createdAt: company.createdAt
+    })));
+
+    // Son kaydolan kullanıcılar
+    const recentUsers = await userRepository.find({
+      relations: ['company'],
+      order: { createdAt: 'DESC' },
+      take: 5
+    });
+
+    activities.push(...recentUsers.map(user => ({
+      id: `user-${user.id}`,
+      type: 'user_created',
+      message: `${user.firstName} ${user.lastName} kullanıcısı ${user.company?.name || 'sistem'} bünyesinde oluşturuldu`,
+      createdAt: user.createdAt
+    })));
+
+    // Son oluşturulan anketler
+    const recentSurveys = await surveyRepository.find({
+      relations: ['creator', 'creator.company'],
+      order: { createdAt: 'DESC' },
+      take: 5
+    });
+
+    activities.push(...recentSurveys.map(survey => ({
+      id: `survey-${survey.id}`,
+      type: 'survey_created',
+      message: `"${survey.title}" anketi ${survey.creator.company?.name} şirketi tarafından oluşturuldu`,
+      createdAt: survey.createdAt
+    })));
+
+    // Son gelen yanıtlar
+    const recentResponses = await responseRepository.find({
+      relations: ['survey', 'survey.creator', 'survey.creator.company'],
+      order: { createdAt: 'DESC' },
+      take: 5
+    });
+
+    activities.push(...recentResponses.map(response => ({
+      id: `response-${response.id}`,
+      type: 'survey_response',
+      message: `"${response.survey.title}" anketine (${response.survey.creator.company?.name}) yeni bir yanıt geldi`,
+      createdAt: response.createdAt
+    })));
+
+    // Aktiviteleri tarihe göre sırala
+    const sortedActivities = activities
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 10);
+
+    res.json(sortedActivities);
+  } catch (error) {
+    console.error('Get system activities error:', error);
     res.status(500).json({ message: 'Sunucu hatası' });
   }
 }; 
