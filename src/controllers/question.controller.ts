@@ -54,11 +54,10 @@ export const createQuestion = async (req: AuthRequest, res: Response): Promise<v
 
     // Seçenekleri ekleme (eğer varsa)
     if (options && ['single_choice', 'multiple_choice'].includes(type)) {
-      const questionOptions = options.map((opt: any, index: number) => 
+      const questionOptions = options.map((optionText: string, index: number) => 
         questionOptionRepository.create({
-          text: opt.text,
+          text: optionText,
           order: index,
-          metadata: opt.metadata,
           question
         })
       );
@@ -240,6 +239,42 @@ export const reorderQuestions = async (req: AuthRequest, res: Response): Promise
     res.json({ message: 'Soru sıralaması güncellendi' });
   } catch (error) {
     console.error('Reorder questions error:', error);
+    res.status(500).json({ message: 'Sunucu hatası' });
+  }
+};
+
+// Soruları Listeleme
+export const listQuestions = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user?.userId) {
+      res.status(401).json({ message: 'Yetkilendirme başarısız' });
+      return;
+    }
+
+    const { surveyId } = req.params;
+
+    // Anket kontrolü
+    const surveyRepository = getRepository(Survey);
+    const survey = await surveyRepository.findOne({
+      where: { id: surveyId, creator: { id: req.user.userId } }
+    });
+
+    if (!survey) {
+      res.status(404).json({ message: 'Anket bulunamadı' });
+      return;
+    }
+
+    // Soruları getir
+    const questionRepository = getRepository(Question);
+    const questions = await questionRepository.find({
+      where: { survey: { id: surveyId } },
+      relations: ['options'],
+      order: { order: 'ASC' }
+    });
+
+    res.json(questions);
+  } catch (error) {
+    console.error('List questions error:', error);
     res.status(500).json({ message: 'Sunucu hatası' });
   }
 }; 

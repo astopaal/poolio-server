@@ -3,6 +3,7 @@ import { getRepository } from 'typeorm';
 import { Survey } from '../models/Survey';
 import { Question } from '../models/Question';
 import { AuthRequest } from '../middleware/auth';
+import { Response as ResponseModel } from '../models/Response';
 
 // Anket Oluşturma
 export const createSurvey = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -236,6 +237,67 @@ export const deleteSurvey = async (req: AuthRequest, res: Response): Promise<voi
     res.json({ message: 'Anket başarıyla silindi' });
   } catch (error) {
     console.error('Delete survey error:', error);
+    res.status(500).json({ message: 'Sunucu hatası' });
+  }
+};
+
+// Son aktiviteleri getir
+export const getRecentActivities = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user?.userId) {
+      res.status(401).json({ message: 'Yetkilendirme başarısız' });
+      return;
+    }
+
+    const surveyRepository = getRepository(Survey);
+    const responseRepository = getRepository(ResponseModel);
+
+    // Son 10 aktiviteyi getir
+    const activities = [];
+
+    // Son oluşturulan anketler
+    const recentSurveys = await surveyRepository.find({
+      where: {
+        creator: { id: req.user.userId }
+      },
+      order: {
+        createdAt: 'DESC'
+      },
+      take: 5,
+      relations: ['creator']
+    });
+
+    activities.push(...recentSurveys.map(survey => ({
+      id: `survey-${survey.id}`,
+      type: 'survey_created',
+      message: `"${survey.title}" anketi oluşturuldu`,
+      createdAt: survey.createdAt
+    })));
+
+    // Son yanıtlar
+    const recentResponses = await responseRepository
+      .createQueryBuilder('response')
+      .leftJoinAndSelect('response.survey', 'survey')
+      .where('survey.creator.id = :userId', { userId: req.user.userId })
+      .orderBy('response.createdAt', 'DESC')
+      .take(5)
+      .getMany();
+
+    activities.push(...recentResponses.map(response => ({
+      id: `response-${response.id}`,
+      type: 'survey_response',
+      message: `"${response.survey.title}" anketine yeni bir yanıt geldi`,
+      createdAt: response.createdAt
+    })));
+
+    // Aktiviteleri tarihe göre sırala
+    const sortedActivities = activities
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 10);
+
+    res.json(sortedActivities);
+  } catch (error) {
+    console.error('Get recent activities error:', error);
     res.status(500).json({ message: 'Sunucu hatası' });
   }
 }; 
