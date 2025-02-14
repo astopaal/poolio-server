@@ -18,7 +18,8 @@ router.delete('/companies/:id', superAdminController.deactivateCompany);
 // Company Admin yönetimi
 router.post('/company-admins', superAdminController.createCompanyAdmin);
 
-// Sistem istatistikleri
+// Sistem istatistikleri ve aktiviteleri
 router.get('/stats', superAdminController.getSystemStats);
+router.get('/activities', superAdminController.getSystemActivities);
 
 export default router; 

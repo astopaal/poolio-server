@@ -16,7 +16,8 @@ router.put('/profile', companyAdminController.updateCompanyProfile);
 router.post('/users', companyAdminController.createUser);
 router.get('/users', companyAdminController.listUsers);
 
-// Şirket istatistikleri
+// Şirket istatistikleri ve aktiviteleri
 router.get('/stats', companyAdminController.getCompanyStats);
+router.get('/activities', companyAdminController.getCompanyActivities);
 
 export default router; 

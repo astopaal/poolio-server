@@ -8,6 +8,9 @@ const router = Router();
 // Tüm route'lar authenticate gerektirir
 router.use(authenticate);
 
+// Son aktiviteleri getir
+router.get('/recent-activities', authorize(['editor', 'company_admin', 'super_admin']), surveyController.getRecentActivities);
+
 // Anket yönetimi (editor, company_admin ve super_admin rollerine açık)
 router.post('/', authorize(['editor', 'company_admin', 'super_admin']), surveyController.createSurvey);
 router.get('/', authorize(['editor', 'company_admin', 'super_admin']), surveyController.listSurveys);

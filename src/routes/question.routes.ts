@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as questionController from '../controllers/question.controller';
 import { authenticate, authorize } from '../middleware/auth';
+import { listQuestions } from '../controllers/question.controller';
 
 const router = Router({ mergeParams: true }); // surveyId parametresini almak için
 
@@ -12,5 +13,7 @@ router.post('/', authorize(['editor', 'company_admin']), questionController.crea
 router.put('/:questionId', authorize(['editor', 'company_admin']), questionController.updateQuestion);
 router.delete('/:questionId', authorize(['editor', 'company_admin']), questionController.deleteQuestion);
 router.post('/reorder', authorize(['editor', 'company_admin']), questionController.reorderQuestions);
+
+router.get('/', listQuestions);
 
 export default router; 
