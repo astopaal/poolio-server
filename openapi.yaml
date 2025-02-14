@@ -50,6 +50,7 @@ components:
           format: password
         companyId:
           type: string
+          format: uuid
 
     LoginResponse:
       type: object
@@ -162,32 +163,14 @@ components:
       properties:
         id:
           type: string
-        survey:
-          $ref: '#/components/schemas/Survey'
-        respondent:
-          $ref: '#/components/schemas/User'
-        anonymousId:
+          format: uuid
+        surveyId:
           type: string
+          format: uuid
         answers:
           type: array
           items:
             $ref: '#/components/schemas/Answer'
-        metadata:
-          type: object
-          properties:
-            userAgent:
-              type: string
-            ipAddress:
-              type: string
-            location:
-              type: object
-              properties:
-                country:
-                  type: string
-                city:
-                  type: string
-            completionTime:
-              type: number
         isCompleted:
           type: boolean
         createdAt:
@@ -199,8 +182,10 @@ components:
       properties:
         id:
           type: string
-        question:
-          $ref: '#/components/schemas/Question'
+          format: uuid
+        questionId:
+          type: string
+          format: uuid
         value:
           type: object
           properties:
@@ -216,54 +201,39 @@ components:
               type: number
             scale:
               type: number
-        answeredAt:
-          type: string
-          format: date-time
 
     Survey:
       type: object
       properties:
         id:
           type: string
+          format: uuid
         title:
           type: string
         description:
           type: string
         isPublished:
           type: boolean
+        status:
+          type: string
+          enum: [draft, active, completed, archived]
         startDate:
           type: string
           format: date-time
         endDate:
           type: string
           format: date-time
-        status:
-          type: string
-          enum: [draft, active, completed, archived]
-        isPasswordProtected:
-          type: boolean
-        password:
-          type: string
-        allowAnonymous:
-          type: boolean
-        creator:
-          $ref: '#/components/schemas/User'
         questions:
           type: array
           items:
             $ref: '#/components/schemas/Question'
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
 
     Question:
       type: object
       properties:
         id:
           type: string
+          format: uuid
         text:
           type: string
         type:
@@ -272,63 +242,40 @@ components:
         isRequired:
           type: boolean
         order:
-          type: number
-        validations:
-          type: object
-          properties:
-            minLength:
-              type: number
-            maxLength:
-              type: number
-            min:
-              type: number
-            max:
-              type: number
-            pattern:
-              type: string
+          type: integer
         options:
           type: array
           items:
             $ref: '#/components/schemas/QuestionOption'
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
+        validations:
+          type: object
+          properties:
+            minLength:
+              type: integer
+            maxLength:
+              type: integer
+            min:
+              type: number
+            max:
+              type: number
 
     QuestionOption:
       type: object
       properties:
         id:
           type: string
+          format: uuid
         text:
           type: string
         order:
-          type: number
-        metadata:
-          type: object
-          properties:
-            value:
-              type: string
-            color:
-              type: string
-            icon:
-              type: string
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
+          type: integer
 
 paths:
   /auth/login:
     post:
       tags:
-        - Kimlik Doğrulama
-      summary: Kullanıcı Girişi
-      description: Email ve şifre ile kullanıcı girişi yapar
+        - Auth
+      summary: Kullanıcı girişi
       requestBody:
         required: true
         content:
@@ -338,19 +285,14 @@ paths:
       responses:
         '200':
           description: Başarılı giriş
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LoginResponse'
         '401':
           description: Geçersiz kimlik bilgileri
 
   /auth/register:
     post:
       tags:
-        - Kimlik Doğrulama
-      summary: Kullanıcı Kaydı
-      description: Yeni bir kullanıcı kaydı oluşturur
+        - Auth
+      summary: Yeni kullanıcı kaydı
       requestBody:
         required: true
         content:
@@ -361,12 +303,12 @@ paths:
         '201':
           description: Kullanıcı başarıyla oluşturuldu
         '400':
-          description: Geçersiz istek veya email zaten kullanımda
+          description: Geçersiz veri
 
   /auth/logout:
     post:
       tags:
-        - Kimlik Doğrulama
+        - Auth
       summary: Çıkış Yap
       description: Kullanıcı oturumunu sonlandırır
       security:
@@ -380,7 +322,7 @@ paths:
   /auth/refresh-token:
     post:
       tags:
-        - Kimlik Doğrulama
+        - Auth
       summary: Token Yenileme
       description: Refresh token kullanarak yeni bir access token alır
       requestBody:
@@ -400,30 +342,23 @@ paths:
         '401':
           description: Geçersiz refresh token
 
-  /super-admin/companies:
+  /surveys:
     get:
       tags:
-        - Super Admin
-      summary: Tüm Şirketleri Listele
-      description: Sistemdeki tüm şirketleri listeler
+        - Surveys
+      summary: Anketleri listele
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: Şirket listesi
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Company'
+          description: Anket listesi başarıyla getirildi
         '401':
-          description: Yetkisiz erişim
+          description: Yetkilendirme başarısız
+
     post:
       tags:
-        - Super Admin
-      summary: Yeni Şirket Oluştur
-      description: Sisteme yeni bir şirket ekler
+        - Surveys
+      summary: Yeni anket oluştur
       security:
         - BearerAuth: []
       requestBody:
@@ -431,23 +366,302 @@ paths:
         content:
           application/json:
             schema:
+              $ref: '#/components/schemas/Survey'
+      responses:
+        '201':
+          description: Anket başarıyla oluşturuldu
+        '401':
+          description: Yetkilendirme başarısız
+
+  /surveys/{surveyId}:
+    get:
+      tags:
+        - Surveys
+      summary: Anket detaylarını getir
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: surveyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Anket detayları başarıyla getirildi
+        '404':
+          description: Anket bulunamadı
+
+    put:
+      tags:
+        - Surveys
+      summary: Anket güncelle
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: surveyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Survey'
+      responses:
+        '200':
+          description: Anket başarıyla güncellendi
+        '404':
+          description: Anket bulunamadı
+
+    delete:
+      tags:
+        - Surveys
+      summary: Anket sil
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: surveyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Anket başarıyla silindi
+        '404':
+          description: Anket bulunamadı
+
+  /surveys/{surveyId}/questions:
+    get:
+      tags:
+        - Questions
+      summary: Anketin sorularını listele
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: surveyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sorular başarıyla getirildi
+        '404':
+          description: Anket bulunamadı
+
+    post:
+      tags:
+        - Questions
+      summary: Ankete yeni soru ekle
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: surveyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Question'
+      responses:
+        '201':
+          description: Soru başarıyla eklendi
+        '404':
+          description: Anket bulunamadı
+
+  /surveys/{surveyId}/questions/{questionId}:
+    put:
+      tags:
+        - Questions
+      summary: Soru güncelle
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: surveyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Question'
+      responses:
+        '200':
+          description: Soru başarıyla güncellendi
+        '404':
+          description: Soru bulunamadı
+
+    delete:
+      tags:
+        - Questions
+      summary: Soru sil
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: surveyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Soru başarıyla silindi
+        '404':
+          description: Soru bulunamadı
+
+  /surveys/{surveyId}/questions/reorder:
+    post:
+      tags:
+        - Questions
+      summary: Soruları yeniden sırala
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: surveyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
               type: object
-              required:
-                - name
-                - slug
               properties:
-                name:
-                  type: string
-                slug:
-                  type: string
-                settings:
-                  type: object
+                questionOrders:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      order:
+                        type: integer
+      responses:
+        '200':
+          description: Sorular başarıyla yeniden sıralandı
+        '404':
+          description: Anket bulunamadı
+
+  /surveys/{surveyId}/responses:
+    get:
+      tags:
+        - Responses
+      summary: Anket yanıtlarını listele
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: surveyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Yanıtlar başarıyla getirildi
+        '404':
+          description: Anket bulunamadı
+
+    post:
+      tags:
+        - Responses
+      summary: Ankete yanıt gönder
+      parameters:
+        - name: surveyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Response'
+      responses:
+        '201':
+          description: Yanıt başarıyla kaydedildi
+        '404':
+          description: Anket bulunamadı
+
+  /surveys/{surveyId}/responses/statistics:
+    get:
+      tags:
+        - Responses
+      summary: Anket yanıt istatistiklerini getir
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: surveyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: İstatistikler başarıyla getirildi
+        '404':
+          description: Anket bulunamadı
+
+  /super-admin/companies:
+    get:
+      tags:
+        - Super Admin
+      summary: Şirketleri listele
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Şirket listesi başarıyla getirildi
+        '403':
+          description: Yetkisiz erişim
+
+    post:
+      tags:
+        - Super Admin
+      summary: Yeni şirket oluştur
+      security:
+        - BearerAuth: []
       responses:
         '201':
           description: Şirket başarıyla oluşturuldu
-        '400':
-          description: Geçersiz istek
-        '401':
+        '403':
           description: Yetkisiz erişim
 
   /super-admin/companies/{id}:
@@ -586,54 +800,32 @@ paths:
   /company-admin/profile:
     get:
       tags:
-        - Şirket Yönetimi
-      summary: Şirket Profilini Görüntüle
-      description: Mevcut şirketin profilini görüntüler
+        - Company Admin
+      summary: Şirket profilini getir
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: Şirket profili
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Company'
-        '401':
+          description: Şirket profili başarıyla getirildi
+        '403':
           description: Yetkisiz erişim
+
     put:
       tags:
-        - Şirket Yönetimi
-      summary: Şirket Profilini Güncelle
-      description: Mevcut şirketin profilini günceller
+        - Company Admin
+      summary: Şirket profilini güncelle
       security:
         - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                website:
-                  type: string
-                phone:
-                  type: string
-                address:
-                  type: string
-                settings:
-                  type: object
       responses:
         '200':
-          description: Profil güncellendi
-        '401':
+          description: Şirket profili başarıyla güncellendi
+        '403':
           description: Yetkisiz erişim
 
   /company-admin/users:
     get:
       tags:
-        - Şirket Yönetimi
+        - Company Admin
       summary: Kullanıcıları Listele
       description: Şirkete ait kullanıcıları listeler
       security:
@@ -651,7 +843,7 @@ paths:
           description: Yetkisiz erişim
     post:
       tags:
-        - Şirket Yönetimi
+        - Company Admin
       summary: Kullanıcı Oluştur
       description: Şirkete yeni bir kullanıcı ekler
       security:
@@ -693,7 +885,7 @@ paths:
   /company-admin/stats:
     get:
       tags:
-        - Şirket Yönetimi
+        - Company Admin
       summary: Şirket İstatistikleri
       description: Şirkete ait istatistikleri getirir
       security:
@@ -711,7 +903,7 @@ paths:
   /responses/{surveyId}:
     post:
       tags:
-        - Yanıtlar
+        - Responses
       summary: Ankete yanıt gönder
       description: Bir ankete yanıt gönderir (anonim veya kullanıcı olarak)
       parameters:
@@ -767,7 +959,7 @@ paths:
     
     get:
       tags:
-        - Yanıtlar
+        - Responses
       summary: Anket yanıtlarını listele
       description: Bir anketin tüm yanıtlarını listeler
       security:
@@ -798,7 +990,7 @@ paths:
   /responses/{surveyId}/statistics:
     get:
       tags:
-        - Yanıtlar
+        - Responses
       summary: Anket yanıt istatistiklerini getir
       description: Bir anketin yanıt istatistiklerini getirir
       security:
@@ -850,164 +1042,10 @@ paths:
         '500':
           description: Sunucu hatası
 
-  /surveys:
-    get:
-      tags:
-        - Anketler
-      summary: Anketleri Listele
-      description: Kullanıcının yetkisi dahilindeki anketleri listeler
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Anket listesi başarıyla getirildi
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Survey'
-        '401':
-          description: Yetkisiz erişim
-    
+  /surveys/{surveyId}/toggle-publish:
     post:
       tags:
-        - Anketler
-      summary: Yeni Anket Oluştur
-      description: Yeni bir anket oluşturur
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - title
-              properties:
-                title:
-                  type: string
-                description:
-                  type: string
-                settings:
-                  type: object
-                  properties:
-                    isPasswordProtected:
-                      type: boolean
-                    password:
-                      type: string
-                    allowAnonymous:
-                      type: boolean
-                    startDate:
-                      type: string
-                      format: date-time
-                    endDate:
-                      type: string
-                      format: date-time
-      responses:
-        '201':
-          description: Anket başarıyla oluşturuldu
-        '400':
-          description: Geçersiz istek
-        '401':
-          description: Yetkisiz erişim
-
-  /surveys/{id}:
-    get:
-      tags:
-        - Anketler
-      summary: Anket Detayı
-      description: Belirli bir anketin detaylarını getirir
-      security:
-        - BearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: Anket ID
-      responses:
-        '200':
-          description: Anket detayları başarıyla getirildi
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Survey'
-        '404':
-          description: Anket bulunamadı
-    
-    put:
-      tags:
-        - Anketler
-      summary: Anket Güncelle
-      description: Belirli bir anketi günceller
-      security:
-        - BearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: Anket ID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                title:
-                  type: string
-                description:
-                  type: string
-                settings:
-                  type: object
-                  properties:
-                    isPasswordProtected:
-                      type: boolean
-                    password:
-                      type: string
-                    allowAnonymous:
-                      type: boolean
-                    startDate:
-                      type: string
-                      format: date-time
-                    endDate:
-                      type: string
-                      format: date-time
-      responses:
-        '200':
-          description: Anket başarıyla güncellendi
-        '404':
-          description: Anket bulunamadı
-    
-    delete:
-      tags:
-        - Anketler
-      summary: Anket Sil
-      description: Belirli bir anketi siler
-      security:
-        - BearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: Anket ID
-      responses:
-        '200':
-          description: Anket başarıyla silindi
-        '404':
-          description: Anket bulunamadı
-
-  /surveys/{id}/toggle-publish:
-    post:
-      tags:
-        - Anketler
+        - Surveys
       summary: Anket Yayın Durumunu Değiştir
       description: Anketin yayın durumunu değiştirir (yayınla/yayından kaldır)
       security:
@@ -1022,221 +1060,5 @@ paths:
       responses:
         '200':
           description: Anket yayın durumu başarıyla değiştirildi
-        '404':
-          description: Anket bulunamadı
-
-  /surveys/{surveyId}/questions:
-    get:
-      tags:
-        - Sorular
-      summary: Anketin Sorularını Listele
-      description: Belirli bir anketin tüm sorularını listeler
-      security:
-        - BearerAuth: []
-      parameters:
-        - in: path
-          name: surveyId
-          required: true
-          schema:
-            type: string
-          description: Anket ID
-      responses:
-        '200':
-          description: Soru listesi başarıyla getirildi
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Question'
-        '404':
-          description: Anket bulunamadı
-    
-    post:
-      tags:
-        - Sorular
-      summary: Yeni Soru Ekle
-      description: Ankete yeni bir soru ekler
-      security:
-        - BearerAuth: []
-      parameters:
-        - in: path
-          name: surveyId
-          required: true
-          schema:
-            type: string
-          description: Anket ID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - text
-                - type
-              properties:
-                text:
-                  type: string
-                type:
-                  type: string
-                  enum: [text, number, single_choice, multiple_choice, rating, date]
-                isRequired:
-                  type: boolean
-                order:
-                  type: number
-                validations:
-                  type: object
-                  properties:
-                    minLength:
-                      type: number
-                    maxLength:
-                      type: number
-                    min:
-                      type: number
-                    max:
-                      type: number
-                    pattern:
-                      type: string
-                options:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      text:
-                        type: string
-                      order:
-                        type: number
-                      metadata:
-                        type: object
-      responses:
-        '201':
-          description: Soru başarıyla eklendi
-        '400':
-          description: Geçersiz istek
-        '404':
-          description: Anket bulunamadı
-
-  /surveys/{surveyId}/questions/{questionId}:
-    put:
-      tags:
-        - Sorular
-      summary: Soru Güncelle
-      description: Belirli bir soruyu günceller
-      security:
-        - BearerAuth: []
-      parameters:
-        - in: path
-          name: surveyId
-          required: true
-          schema:
-            type: string
-          description: Anket ID
-        - in: path
-          name: questionId
-          required: true
-          schema:
-            type: string
-          description: Soru ID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                text:
-                  type: string
-                type:
-                  type: string
-                  enum: [text, number, single_choice, multiple_choice, rating, date]
-                isRequired:
-                  type: boolean
-                order:
-                  type: number
-                validations:
-                  type: object
-                options:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      text:
-                        type: string
-                      order:
-                        type: number
-                      metadata:
-                        type: object
-      responses:
-        '200':
-          description: Soru başarıyla güncellendi
-        '404':
-          description: Soru veya anket bulunamadı
-    
-    delete:
-      tags:
-        - Sorular
-      summary: Soru Sil
-      description: Belirli bir soruyu siler
-      security:
-        - BearerAuth: []
-      parameters:
-        - in: path
-          name: surveyId
-          required: true
-          schema:
-            type: string
-          description: Anket ID
-        - in: path
-          name: questionId
-          required: true
-          schema:
-            type: string
-          description: Soru ID
-      responses:
-        '200':
-          description: Soru başarıyla silindi
-        '404':
-          description: Soru veya anket bulunamadı
-
-  /surveys/{surveyId}/questions/reorder:
-    post:
-      tags:
-        - Sorular
-      summary: Soruları Yeniden Sırala
-      description: Anketin sorularını yeniden sıralar
-      security:
-        - BearerAuth: []
-      parameters:
-        - in: path
-          name: surveyId
-          required: true
-          schema:
-            type: string
-          description: Anket ID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - questionOrders
-              properties:
-                questionOrders:
-                  type: array
-                  items:
-                    type: object
-                    required:
-                      - id
-                      - order
-                    properties:
-                      id:
-                        type: string
-                      order:
-                        type: number
-      responses:
-        '200':
-          description: Sorular başarıyla yeniden sıralandı
         '404':
           description: Anket bulunamadı 
